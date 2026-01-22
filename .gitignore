@@ -1,0 +1,12 @@
+.DS_Store
+*.aux
+*.log
+*.pdf
+*.synctex.gz
+*.bbl
+*.blg
+*.out
+*.toc
+*.fls
+*.fdb_latexmk
+Test_Harness_Technical_Report/
