@@ -5,10 +5,44 @@
 Based on Knowledge graph and synthetic patients, the Harness generates the following:
 
 \subsubsection{Multiple Choice Question Generation}
-- Topic selection
-- Generate question Stem and right answer based on the graph
-- Select distractors from the graph
-- Otional: use LLM to form the question wording, otherwise use hard-coded templates.
+The engine ensures semantic accuracy by deriving relationships directly from the graph topology while employing a hybrid text generation approach (Templates + LLM) for readability.
+
+1. Topic Selection and Traversal Modes
+The system does not generate questions randomly; it operates in controlled batches defined in the $generate_neo4j_questions$ entry point. The engine iterates through specific relationship pairs (e.g., Disease $\rightarrow$ Symptom, Symptom $\rightarrow$ Diagnosis) to ensure a balanced distribution of clinical topics.To support different depths of clinical reasoning, the engine employs two distinct graph traversal modes:
+Direct Mode (Node $\leftrightarrow$ Disease): Used when the relationship between the source and target is explicit (e.g., "What is a symptom of Malaria?").
+Transitive Mode (Source $\leftrightarrow$ Disease $\leftrightarrow$ Target): Used for higher-order reasoning where two clinical entities are linked via a shared disease context (e.g., "A patient presents with [Symptom]; what is the appropriate [Management]?").
+
+2. Question Stem and Answer Generation
+Once a topic and mode are selected, the QuestionNeoHandler executes a Cypher query to identify a valid Source Node (the context) and a Target Node (the correct answer).
+
+Source Selection: A random pool of nodes matching the source label (e.g., "Symptom") is fetched.
+
+Path Verification:
+
+In Direct Mode, the query verifies an immediate edge exists between Source and Target.
+
+In Transitive Mode, the query anchors on an intermediate Disease node to ensure the Source and Target are clinically related to the same condition.
+
+Context Retrieval: The system captures the specific Disease node responsible for the connection to serve as the "Rationale Context" for the final output.
+
+3. Distractor Selection Logic
+The validity of an MCQ depends on its distractors being plausible but strictly incorrect. The $get_distractors$ method utilizes graph exclusion logic to mathematically guarantee incorrectness relative to the specific question context.The system selects $N$ distractors using the following logic:
+
+For Direct Mode: Select nodes of the Target Label (e.g., "Symptoms") that exist in the graph. Exclude any node that has an existing relationship with the current Source Node (Disease).
+
+For Transitive Mode: Identify the specific Disease associated with the correct answer. Select Target Nodes (e.g., "Management") connected to other Diseases. Exclude any Target Node connected to the current context's Disease to prevent "technically correct but alternative" answers.
+
+4. Text Generation: 
+The QuestionBuilder class handles the transformation of raw graph nodes into natural language. It has two modes for this transformation:
+Method 1: Hard-Coded Templating (Default)
+The system utilizes a dictionary of pre-validated string templates keyed by relationship pairs (e.g., ("Disease", "Symptom")).
+Input: "Malaria" (Source), "Fever" (Target).Template: "What is one symptom associated with {0}?"Output: "What is one symptom associated with Malaria?"
+
+Method 2: LLM Refinement (Optional)If the $use_llm_questions$ flag is enabled, the system passes the template-generated raw text to a Large Language Model (e.g., GPT-4o or Claude). 
+Role: The LLM does not determine facts or logic. It is strictly used as a "Grammar and Style Engine."
+Process: It receives the raw template question and the clinical entities. It rephrases the stem to sound more natural or clinical.
+Safety: The Correct Answer and Distractors are strictly passed through from the Graph; the LLM is not allowed to halluncinate new medical options.
+
 
 \subsubsection{Vignette Based Question Generation}
 \begin{verbatim}

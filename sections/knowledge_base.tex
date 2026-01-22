@@ -8,6 +8,8 @@ This section details the end-to-end pipeline for constructing a graph-oriented k
 The preprocessing phase serves as the entry point for the knowledge base construction, ensuring that structured data from the source guidelines is accurately prepared for downstream semantic analysis.
 
 The workflow initiates with the JSON Extraction module, which ingests the WHO SMART Guidelines artifacts obtained from FHIR (Fast Healthcare Interoperability Resources) servers. This step isolates the relevant textual payloads, stripping away syntactic noise and structural metadata, to produce a clean stream of raw text.
+Code: python/info_extraction/EntityExtraction.py
+Function: extract_text_from_fhir
 
 Once isolated, this raw text is fed into Entity Extraction pipelines. There are two implementations:
 - NER Named Entity Recognition (NER) pipeline
@@ -15,8 +17,13 @@ Once isolated, this raw text is fed into Entity Extraction pipelines. There are 
 
 NER Named Entity Recognition (NER) pipeline
 Named Entity Recognition (NER) pipeline. Unlike generic NLP methods, this approach can leverage a model that has been fine-tuned specifically for the biomedical domain to identify and tag medically relevant entities such as clinical terms, intervention protocols, and dosage parameters. This targeted extraction transforms the unstructured raw text into a set of annotated entities, ready for normalization. We've used the model \textit{blaze999/Medical-NER} to select the diseases that are within the content.
+Code: python/info_extraction/EntityExtraction.py
+Functions: extract_entities, enitity_cleaner_llm, entity_mapping
+
 
 After extracting the disease names, an LLM agent is prompted to select attributes related to each disease: diagnosis, management, symptoms, prognosis and contraindications. This agent has access to the entire knowledge base.
+Code: python/info_extraction/EntityExtraction.py
+Functions: extract_info_RAG
 
 
 General Purpose LLM extraction
