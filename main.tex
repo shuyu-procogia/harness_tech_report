@@ -1,0 +1,40 @@
+\documentclass{article}
+\usepackage{graphicx} % Required for inserting images
+% Required for tables:
+\usepackage[normalem]{ulem}
+\useunder{\uline}{\ul}{}
+% For bibliography
+\usepackage[backend=biber,style=numeric,sorting=nyt]{biblatex}
+\addbibresource{references.bib}
+
+\title{Test Harness Technical Report}
+\author{}
+\date{January 2026}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+
+% Main sections
+\input{sections/introduction}
+\input{sections/background}
+
+\section{Project Development}
+\input{sections/knowledge_base}
+\input{sections/patient_generation}
+\input{sections/question_generation}
+\input{sections/evaluation_pipelines}
+\input{sections/expert_evaluation}
+\input{sections/extensibility}
+\input{sections/directory_structure}
+
+% Bibliography
+\printbibliography
+
+% Appendix
+\appendix
+\input{sections/appendix_glossary}
+
+\end{document}

@@ -1,0 +1,17 @@
+% Author:
+% Date: January 21, 2026
+
+\subsection{Harness Extensibility}
+Ensure that the Harness is able to be integrated with new WHO guidelines and integrates with new schemas. Also, ensuring that the Harness can be deployed in any environments, including those that use low-resource languages not available directly for LLMs.
+
+- Provided modules that accept non-WHO-SMART-guideline datasets.
+- Provided base classes for popular commercial translation services.
+
+\subsubsection{Multi-Language Support}
+Because the Harness is meant to be inclusive of all health systems around the globe, we have developed methods to make calls to Google Translate API and to Azure AI translation services within the harness. They can be applied on top of any generations.
+
+We tested the ability of these two providers on 14 African languages.
+
+\subsubsection{Data Preprocessing Extensibility}
+We have developed a method to parse PDFs, docx, HTML, txt and non-FHIR json files into raw text.
+The raw text is then used in the knowledge extraction step.

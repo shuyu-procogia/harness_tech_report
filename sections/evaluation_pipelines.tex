@@ -1,0 +1,37 @@
+% Author:
+% Date: January 21, 2026
+
+\subsection{LLM Evaluation Pipelines - The Harness}
+Leverage the MCQA, vignette-based Q\&A, and MT conversations to evaluate the ability of LLMs to deal with medical tasks.
+
+\subsubsection{Multiple Choice Question Evaluation}
+- Raw parsing of LLM responses - parse the text to extract the response.
+- Fuzzy matching: Use AI to extract the response instead of text-based approach.
+- After parsing, calculate accuracy.
+
+\subsubsection{Vignette Base Question Evaluation}
+- Evaluate the response in 4 competences:
+Accuracy
+Completeness of essential elements
+Absence of incorrect or potentially harmful
+statements
+Clarity and use of up-to-date terminology
+
+\subsubsection{Multi-Turn Conversation Evaluation}
+Two sets of evaluation:
+\textbf{Competence evaluation}
+Using an LLM judge, score from 1-5 the responses in 9 axes:
+\textit{Clinical}
+Accuracy of Information
+Thoroughness of History Taking
+Logical Triage/Diagnosis
+Safety and Risk Assessment
+\textit{Communication}
+Clarity of Explanation
+Empathy and Compassion
+Professionalism and Respect
+Patient Autonomy (Shared Decision-Making): allow the patient to be part of the decision-making process
+Reassurance: truthful reassurance without minimizing the patient's concerns
+
+\textbf{Universal Rubrics}
+37 Criteria and Rubrics generated on top of the HealthBench work.

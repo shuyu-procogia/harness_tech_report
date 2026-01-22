@@ -1,0 +1,34 @@
+% Author:
+% Date: January 21, 2026
+
+\subsection{Constructing the Knowledge Base}
+This section details the end-to-end pipeline for constructing a graph-oriented knowledge base derived from the WHO SMART Guidelines on HIV and Immunization. The process begins with the systematic extraction of domain-specific content from the source guidelines, capturing clinical recommendations and definitions. This raw data undergoes a rigorous parsing and normalization phase to transform unstructured text into standardized data nodes. Finally, these nodes are ingested into a Neo4j graph database, establishing the lateral relationships necessary to support complex querying and decision-support logic.
+
+\subsubsection{Data Preprocessing}
+The preprocessing phase serves as the entry point for the knowledge base construction, ensuring that structured data from the source guidelines is accurately prepared for downstream semantic analysis.
+
+The workflow initiates with the JSON Extraction module, which ingests the WHO SMART Guidelines artifacts obtained from FHIR (Fast Healthcare Interoperability Resources) servers. This step isolates the relevant textual payloads, stripping away syntactic noise and structural metadata, to produce a clean stream of raw text.
+
+Once isolated, this raw text is fed into Entity Extraction pipelines. There are two implementations:
+- NER Named Entity Recognition (NER) pipeline
+- General Purpose LLM extraction
+
+NER Named Entity Recognition (NER) pipeline
+Named Entity Recognition (NER) pipeline. Unlike generic NLP methods, this approach can leverage a model that has been fine-tuned specifically for the biomedical domain to identify and tag medically relevant entities such as clinical terms, intervention protocols, and dosage parameters. This targeted extraction transforms the unstructured raw text into a set of annotated entities, ready for normalization. We've used the model \textit{blaze999/Medical-NER} to select the diseases that are within the content.
+
+After extracting the disease names, an LLM agent is prompted to select attributes related to each disease: diagnosis, management, symptoms, prognosis and contraindications. This agent has access to the entire knowledge base.
+
+
+General Purpose LLM extraction
+Built using Universal Tools
+
+
+\subsubsection{Knowledge Graph}
+Neo4j Schema:
+\begin{verbatim}
+(:Disease)-[:HAS_DIAGNOSIS]->(:Diagnosis)
+(:Disease)-[:HAS_MANAGEMENT]->(:Management)
+(:Disease)-[:HAS_SYMPTOM]->(:Symptom)
+(:Disease)-[:HAS_PROGNOSIS]->(:Prognosis)
+(:Disease)-[:HAS_CONTRAINDICATION]->(:Contraindication)
+\end{verbatim}

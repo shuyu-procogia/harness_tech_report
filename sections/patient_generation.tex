@@ -1,0 +1,14 @@
+% Author:
+% Date: January 21, 2026
+
+\subsection{Synthetic Patient Generation}
+\begin{verbatim}
+llm.simulations.patients.gen_demo_2
+\end{verbatim}
+Inputs: Country, age range, pregnancy proportion, pregnancy lower bound for age
+
+Names are localized based on the given country (52 languages supported).
+Age is uniformly distributed from age range.
+Gender distribution is 50/50.
+Height, weight and BMI are random based on WHO curves.
+Symptoms and conditions are extracted from the knowledge graph.

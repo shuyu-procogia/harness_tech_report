@@ -1,0 +1,28 @@
+% Author:
+% Date: January 21, 2026
+
+\subsection{Directory Structure}
+\begin{verbatim}
+test_harness_project/
+|
++-- python/                    # Main implementation
+|   +-- llm/                   # LLM abstractions and prompts
+|   +-- eval/                  # Evaluation systems
+|   |   +-- mcqa/              # Multiple-choice evaluation
+|   |   \-- conversation/      # Conversation evaluation
+|   +-- neo4j/                 # Knowledge graph integration
+|   |   +-- taxonomy/          # Disease/symptom taxonomies
+|   |   \-- viz/               # Visualization dashboards
+|   +-- translation/           # Multilingual support
+|   \-- simulations/           # Test data generation
+|
++-- data/                      # Input data and knowledge bases
+|   +-- simulations/           # Generated test datasets
+|   \-- extractions/           # Parsed clinical knowledge
+|
++-- outputs/                   # Evaluation results
+|   \-- eval/                  # MCQA, conversation, translation results
+|
++-- examples/                  # Usage examples and demos
+\-- tests/                     # Unit and integration tests
+\end{verbatim}

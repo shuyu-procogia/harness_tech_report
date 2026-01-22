@@ -1,0 +1,44 @@
+% Author:
+% Date: January 21, 2026
+
+\subsection{Question Generation}
+Based on Knowledge graph and synthetic patients, the Harness generates the following:
+
+\subsubsection{Multiple Choice Question Generation}
+- Topic selection
+- Generate question Stem and right answer based on the graph
+- Select distractors from the graph
+- Otional: use LLM to form the question wording, otherwise use hard-coded templates.
+
+\subsubsection{Vignette Based Question Generation}
+\begin{verbatim}
+llm.simulations.vignettes.VignetteGenerator
+\end{verbatim}
+Inputs:
+Package name (HIV, immunization etc)
+LLM model: a model to call to generate the vignette
+Patient list: a list of patients to create vignettes. One question for each patient. If no list is provided will generate random patients.
+
+Loops over a patient list to generate a question from one of the three topics selected randomly:
+Differential diagnosis, initial management, or next diagnostic step
+Output:
+A list of dictionaries, one dict per question.
+
+\subsubsection{Multi-Turn Conversation Generation}
+- Simulate patient background
+- LLM receives the patient background and is asked to impersonate patient. Behavior changes with patient age.
+- An LLM health worker agent engages with the patient LLM.
+- Three auxiliary LLMs work on the background handling: conversation closure (to avoid HW and patient for talking indefinitely), and lab results checker and generator (providing realism to the conversation).
+
+Two methods:
+\begin{verbatim}
+llm.simulations.mt_conversations.make_conversation
+\end{verbatim}
+
+Base method for generating a conversation. Each LLM has to be provided as input.
+
+\begin{verbatim}
+llm.simulations.mt_conversations. simulate_conversation_default
+\end{verbatim}
+
+Instead, only pass the LLM to play the part of the health worker. All the other components are defaulted.
