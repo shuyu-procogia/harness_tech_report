@@ -1,11 +1,17 @@
 \documentclass{article}
 \usepackage{graphicx} % Required for inserting images
+\usepackage[strings]{underscore} % Allow underscores in text
 % Required for tables:
 \usepackage[normalem]{ulem}
 \useunder{\uline}{\ul}{}
 % For bibliography
 \usepackage[backend=biber,style=numeric,sorting=nyt]{biblatex}
 \addbibresource{references.bib}
+% Clickable TOC and references (load hyperref last)
+\usepackage{hyperref}
+\hypersetup{
+    hidelinks
+}
 
 \title{Test Harness Technical Report}
 \author{}
