@@ -13,6 +13,17 @@
     hidelinks
 }
 
+% For back-to-TOC links in section titles
+\usepackage{titlesec}
+\newcommand{\toclink}{\hspace{0.5em}{\small\hyperlink{toc}{$\uparrow$}}}
+
+\titleformat{\section}
+  {\normalfont\Large\bfseries}{\thesection}{1em}{}[\toclink]
+\titleformat{\subsection}
+  {\normalfont\large\bfseries}{\thesubsection}{1em}{}[\toclink]
+\titleformat{\subsubsection}
+  {\normalfont\normalsize\bfseries}{\thesubsubsection}{1em}{}[\toclink]
+
 \title{Test Harness Technical Report}
 \author{}
 \date{January 2026}
@@ -21,6 +32,7 @@
 
 \maketitle
 
+\hypertarget{toc}{}
 \tableofcontents
 
 % Main sections

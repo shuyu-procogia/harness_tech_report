@@ -1,0 +1,82 @@
+% Author: Shuyu Fan, MSc
+% Date: January 29, 2026
+% PatientSim-style Evaluation for Multi-Turn Conversations
+
+\paragraph{PatientSim-style evaluation}
+
+PatientSim is a persona-driven simulator for doctor-patient interactions. We adapted its evaluation to assess health worker quality. The evaluation runs on saved conversation JSON files.
+
+\textbf{Differences from PatientSim:}
+\begin{itemize}
+    \item \textbf{Patient data source}: PatientSim uses real patient data from MIMIC-ED/IV databases (requires PhysioNet credentials). Our harness uses generated profiles: demographics are randomly simulated, physical measurements come from WHO growth curves by age and gender.
+    \item \textbf{Persona simulation}: PatientSim assigns personas along four axes: personality (plain, verbose, distrustful, pleasing, impatient, overanxious), language proficiency (CEFR A/B/C), medical history recall (low/high), and cognitive confusion (normal/high), giving 37 combinations. It checks whether the patient LLM matches the assigned persona. We do not use persona simulation.
+    \item \textbf{Profile extraction}: PatientSim extracts ground truth from de-identified MIMIC-IV/MIMIC-ED records. Names and addresses are removed; demographics and clinical data (chief complaint, medications, diagnoses) are kept. In our system, ground truth is the synthetic profile itself, so we only check whether the patient behaves realistically given that profile.
+\end{itemize}
+
+The evaluation has three components:
+
+\subparagraph{Health worker quality evaluation}
+Adapted from PatientSim's doctor quality evaluation. Scores communication, empathy, and history gathering across 8 dimensions (1--4 scale):
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|p{8cm}|}
+\hline
+\textbf{Dimension} & \textbf{Criteria} \\
+\hline
+Presenting Complaint & Systematic addressing of chief complaint \\
+Systems Review & Thoroughness of systems review \\
+Past Medical History & Completeness of history gathering \\
+Family History & Collection of family medical history \\
+Medication History & Systematic medication inquiry \\
+Managing Patient Concerns & Acknowledgment of patient concerns \\
+Empathy & Empathic communication \\
+Maintaining Patient Welfare & Respect, sensitivity, safety \\
+\hline
+\end{tabular}
+\caption{Health worker quality evaluation dimensions}
+\end{table}
+
+\subparagraph{Patient quality evaluation (profile realism)}
+An LLM-based check of whether the simulated patient seems realistic. Since the synthetic profile is known, this focuses on whether behavior during the conversation is believable. Scored across 6 dimensions (1--4 scale):
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|p{8cm}|}
+\hline
+\textbf{Dimension} & \textbf{Criteria} \\
+\hline
+Age-Appropriate Communication & Does communication style match the patient's age? \\
+Profile Consistency & Do responses match the assigned medical profile? \\
+Demographic Realism & Are physical characteristics realistic and consistent? \\
+Overall Realism & Does the patient seem like a real person? \\
+Symptom Presentation & Are symptoms described realistically? \\
+Emotional Authenticity & Are emotional responses appropriate? \\
+\hline
+\end{tabular}
+\caption{Patient quality evaluation dimensions}
+\end{table}
+
+\subparagraph{Lab LLM evaluation}
+Two sub-evaluations:
+\begin{itemize}
+    \item \textbf{Lab request appropriateness}: Did the health worker order appropriate tests? Were unnecessary tests avoided?
+    \item \textbf{Lab result accuracy}: Are generated lab results clinically appropriate? Do values fall within expected ranges?
+\end{itemize}
+
+\subparagraph{Scoring system}
+All PatientSim-style evaluations use a 1--4 scale:
+\begin{table}[h]
+\centering
+\begin{tabular}{|c|l|}
+\hline
+\textbf{Score} & \textbf{Meaning} \\
+\hline
+1 & Poor / Complete failure \\
+2 & Below average / Frequent issues \\
+3 & Good with minor issues \\
+4 & Excellent / Professional \\
+\hline
+\end{tabular}
+\caption{Scoring system}
+\end{table}

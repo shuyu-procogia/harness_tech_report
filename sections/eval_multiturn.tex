@@ -1,119 +1,14 @@
 % Author: Shuyu Fan, MSc
 % Date: January 22, 2026
 
-\subsubsection{Multi-Turn Conversation Evaluation}
-
-% --- Content from Overleaf (commented out for now) ---
-% Two sets of evaluation:
-% \textbf{Competence evaluation}
-% Using an LLM judge, score from 1-5 the responses in 9 axes:
-% \textit{Clinical}
-% Accuracy of Information
-% Thoroughness of History Taking
-% Logical Triage/Diagnosis
-% Safety and Risk Assessment
-% \textit{Communication}
-% Clarity of Explanation
-% Empathy and Compassion
-% Professionalism and Respect
-% Patient Autonomy (Shared Decision-Making): allow the patient to be part of the decision-making process
-% Reassurance: truthful reassurance without minimizing the patient's concerns
-%
-% \textbf{Universal Rubrics}
-% 37 Criteria and Rubrics generated on top of the HealthBench work.
-% --- End of Overleaf content ---
+\subsubsection{Multi-turn conversation evaluation}
 
 We use two evaluation frameworks for multi-turn conversations:
 \begin{enumerate}
-    \item \textbf{PatientSim-style Evaluation}: The PatientSim framework \cite{patientsim} evaluates differential diagnosis accuracy, persona fidelity, profile consistency, and doctor quality. We adapted its doctor quality evaluation and added patient realism and lab evaluation components.
-    \item \textbf{HealthBench-style Evaluation}: Rubrics from the HealthBench work for medical conversation assessment.
+    \item \textbf{PatientSim-style}: PatientSim \cite{patientsim} evaluates differential diagnosis accuracy, persona fidelity, profile consistency, and doctor quality. We adapted the doctor quality evaluation and added patient realism and lab evaluation.
+    \item \textbf{HealthBench-style}: HealthBench \cite{healthbench} is a benchmark from OpenAI with 262 physicians from 60 countries, 5,000 conversations, and 48,562 unique rubric criteria across seven themes. We extracted universal rubrics that apply across conversations, excluding prompt-specific criteria tied to individual scenarios.
 \end{enumerate}
 
-% =============================================================================
-% PatientSim-style Evaluation
-% =============================================================================
-\paragraph{PatientSim-style Evaluation}
+\input{sections/eval_multiturn_patientsim}
 
-PatientSim is a persona-driven simulator for doctor-patient interactions. We adapted its evaluation methodology to assess health worker quality. The evaluation runs on saved conversation JSON files.
-
-\textbf{Differences from PatientSim:}
-\begin{itemize}
-    \item \textbf{Patient Data Source}: PatientSim uses real patient data from MIMIC-ED/IV databases (requiring PhysioNet credentials). Our test harness uses generated patient profiles: demographics (gender, age) are randomly simulated, and physical measurements (height, weight) come from WHO growth curves.
-    \item \textbf{Persona Simulation}: PatientSim assigns personas along four axes: personality (plain, verbose, distrustful, pleasing, impatient, overanxious), language proficiency (CEFR levels A/B/C), medical history recall (low/high), and cognitive confusion (normal/high), giving 37 persona combinations. It evaluates whether the patient LLM matches the assigned persona. Our implementation does not include persona simulation.
-    \item \textbf{Profile Extraction}: In PatientSim, ground truth patient information is pre-recorded from real medical records. In our system, ground truth is the generated synthetic profile itself, so we evaluate only whether the patient behaves realistically given that profile.
-\end{itemize}
-
-The evaluation has three components:
-
-\subparagraph{Health Worker Quality Evaluation}
-Adapted from PatientSim's doctor quality evaluation. Assesses communication skills, empathy, and history gathering across 8 dimensions, scored 1-4:
-
-\begin{table}[h]
-\centering
-\begin{tabular}{|l|p{8cm}|}
-\hline
-\textbf{Dimension} & \textbf{Criteria} \\
-\hline
-Presenting Complaint & Systematic addressing of chief complaint \\
-Systems Review & Thoroughness of systems review \\
-Past Medical History & Completeness of history gathering \\
-Family History & Collection of family medical history \\
-Medication History & Systematic medication inquiry \\
-Managing Patient Concerns & Acknowledgment of patient concerns \\
-Empathy & Empathic communication \\
-Maintaining Patient Welfare & Respect, sensitivity, safety \\
-\hline
-\end{tabular}
-\caption{Health Worker Quality Evaluation Dimensions}
-\end{table}
-
-\subparagraph{Patient Quality Evaluation (Profile Realism)}
-An LLM-based evaluation that assesses whether the simulated patient appears realistic. Since the synthetic patient profile is already known, this evaluation focuses on whether the patient's behavior during the conversation is believable. Scored across 6 dimensions on a 1-4 scale:
-
-\begin{table}[h]
-\centering
-\begin{tabular}{|l|p{8cm}|}
-\hline
-\textbf{Dimension} & \textbf{Criteria} \\
-\hline
-Age-Appropriate Communication & Does communication style reflect the patient's age? \\
-Profile Consistency & Do responses match assigned medical profile (symptoms, condition, history)? \\
-Demographic Realism & Are physical characteristics (age, height, weight, BMI) realistic and consistent? \\
-Overall Realism & Does the patient seem like a real person with believable presentation? \\
-Symptom Presentation & Are symptoms described in a realistic, clinically appropriate manner? \\
-Emotional Authenticity & Are emotional responses appropriate to the situation? \\
-\hline
-\end{tabular}
-\caption{Patient Quality Evaluation Dimensions}
-\end{table}
-
-\subparagraph{Lab LLM Evaluation}
-Two sub-evaluations:
-\begin{itemize}
-    \item \textbf{Lab Request Appropriateness}: Did the health worker order appropriate tests for the symptoms? Were unnecessary tests avoided?
-    \item \textbf{Lab Result Accuracy}: Are generated lab results clinically appropriate? Do values fall within expected ranges for the diagnosis?
-\end{itemize}
-
-\subparagraph{Scoring System}
-All PatientSim-style evaluations use a 1-4 scale:
-\begin{table}[h]
-\centering
-\begin{tabular}{|c|l|}
-\hline
-\textbf{Score} & \textbf{Meaning} \\
-\hline
-1 & Poor / Complete failure \\
-2 & Below average / Frequent issues \\
-3 & Good with minor issues \\
-4 & Excellent / Professional \\
-\hline
-\end{tabular}
-\caption{Scoring System}
-\end{table}
-
-% =============================================================================
-% HealthBench-style Evaluation
-% =============================================================================
-\paragraph{HealthBench-style Evaluation}
-
-% TODO: Add HealthBench content here
+\input{sections/eval_multiturn_healthbench}

@@ -1,0 +1,101 @@
+% Author: Shuyu Fan, MSc
+% Date: January 29, 2026
+% HealthBench-style Evaluation for Multi-Turn Conversations
+
+\paragraph{HealthBench-style evaluation}
+
+We adapted rubrics from HealthBench \cite{healthbench}, a physician-written benchmark for medical conversation evaluation. HealthBench has 48,562 unique rubric criteria across seven themes and five axes, from 5,000 conversations written by 262 physicians in 60 countries across 26 specialties.
+
+HealthBench organizes evaluation along two dimensions. The seven \textit{themes} are health contexts: emergency referrals, expertise-tailored communication, responding under uncertainty, response depth, health data tasks, global health, and context seeking. The five \textit{axes} are behavioral dimensions: completeness (39\%), accuracy (33\%), context awareness (16\%), communication quality (8\%), and instruction following (4\%).
+
+\subparagraph{Rubric types}
+
+HealthBench has two rubric types. \textit{Consensus criteria} are 34 pre-written criteria assigned only if most reviewing physicians agree they apply; these have higher precision but lower recall. \textit{Example-specific criteria} make up most of the 48,562 criteria, each written by a physician for a specific conversation.
+
+We needed \textit{universal} rubrics that work across any conversation, not just the original HealthBench examples. We built a pipeline to extract and condense these.
+
+\subparagraph{Universal rubric generation pipeline}
+
+Starting from HealthBench's multi-turn prompts, we extracted all example-level rubrics from prompts with real conversations. We classified rubrics using deterministic patterns and GPT-4o to separate prompt-specific rubrics (those mentioning specific conditions, medications, or values) from universal rubrics (general quality criteria). Ambiguous cases went through human review. We then semantically clustered universal rubrics using embeddings, condensing them to about 30 representative rubrics. The pipeline cost \$3--4 and took 60--100 minutes including manual review.
+
+\subparagraph{Short rubrics}
+
+We also generated a ``short'' rubric set, condensed versions of the universal rubrics for faster evaluation. Each short rubric maps to one or more universal rubrics.
+
+\subparagraph{Agreement analysis}
+
+We measured agreement between three rubric types: the original HealthBench ``hard'' rubrics, our universal rubrics, and the short rubrics. Starting from 87 multi-turn prompts (449 rubrics), we filtered to 62 English-only prompts, excluded prompt-specific rubrics, and deduplicated, leaving 91 rubrics from 49 prompts.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Comparison} & \textbf{Original} & \textbf{Filtered} & \textbf{Change} \\
+\hline
+Hard--Universal & 63.0\% & 81.3\% & +18.3pp \\
+Hard--Short & 68.6\% & 84.6\% & +16.0pp \\
+Universal--Short & 83.3\% & 81.3\% & -2.0pp \\
+\hline
+\end{tabular}
+\caption{Rubric agreement rates before and after filtering}
+\end{table}
+
+The original 63--69\% agreement was lowered by two factors. First, some hard rubrics have domain-specific criteria that generic universal rubrics cannot capture. For example, a hard rubric stating ``States that `BP' in the name (e.g., Timolol BP) typically refers to British Pharmacopoeia'' mapped to ``Provide accurate, concise, and relevant information'', which cannot evaluate whether the response correctly explains ``BP'' terminology. A vaccination-specific rubric about immunization schedules for immunocompromised patients similarly mapped to generic ``comprehensive and accurate guidance.'' Second, multiple hard rubrics sometimes map to the same universal rubric, inflating disagreement counts. In one postpartum depression prompt, five hard rubrics (mentioning combination therapy, medication variation, psychotherapy, urgent care for suicidal thoughts, and healthcare consultation) all mapped to one universal rubric about ``comprehensive and accurate guidance''; after deduplication, 7 rubrics reduced to 3.
+
+After filtering, agreement reached 81--85\%, showing the universal rubrics align with HealthBench's evaluation intent for general-purpose criteria.
+
+% --- Original bullet-point version (commented out) ---
+% HealthBench organizes evaluation along two dimensions:
+% \begin{itemize}
+%     \item \textbf{7 Themes} (health contexts): Emergency referrals, Expertise-tailored communication, Responding under uncertainty, Response depth, Health data tasks, Global health, Context seeking
+%     \item \textbf{5 Axes} (behavioral dimensions): Completeness (39\%), Accuracy (33\%), Context awareness (16\%), Communication quality (8\%), Instruction following (4\%)
+% \end{itemize}
+%
+% \subparagraph{Rubric Types}
+%
+% HealthBench uses two types of rubrics:
+% \begin{itemize}
+%     \item \textbf{Consensus criteria}: 34 pre-written criteria assigned to a conversation only if a majority of reviewing physicians agree they are relevant. These provide higher precision but lower recall in finding model behavior failures.
+%     \item \textbf{Example-specific criteria}: The vast majority of the 48,562 unique rubric criteria were written specifically by a physician for that example, capturing conversation-specific nuances that standardized criteria cannot address.
+% \end{itemize}
+%
+% \subparagraph{Universal Rubric Generation Pipeline}
+%
+% Starting from HealthBench's multi-turn prompts, we:
+% \begin{enumerate}
+%     \item \textbf{Extract}: Pull all example-level rubrics from prompts with real conversations
+%     \item \textbf{Classify}: Use deterministic patterns and GPT-4o to separate prompt-specific rubrics (mentions specific conditions, medications, values) from universal rubrics (general quality criteria)
+%     \item \textbf{Review}: Human review of ambiguous classifications
+%     \item \textbf{Cluster}: Semantic clustering of universal rubrics using embeddings, condensing to approximately 30 representative rubrics
+% \end{enumerate}
+%
+% The original 63-69\% agreement was lowered by two factors:
+% \begin{itemize}
+%     \item \textbf{Prompt-specific rubrics}: Some hard rubrics contain domain-specific criteria that generic universal rubrics cannot capture. For example:
+%     \begin{itemize}
+%         \item \textit{British Pharmacopoeia}: Hard rubric ``States that `BP' in the name (e.g., Timolol BP) typically refers to British Pharmacopoeia'' mapped to universal rubric ``Provide accurate, concise, and relevant information''---the universal rubric cannot evaluate whether the response correctly explains ``BP'' terminology.
+%         \item \textit{Vaccination Schedule}: Hard rubric ``States that immunization schedules may vary for high-risk groups, mainly those who are immunocompromised'' mapped to ``Provide comprehensive and accurate guidance''---vaccination-specific criteria reduced to generic guidance.
+%     \end{itemize}
+%     \item \textbf{Duplicate mappings}: Multiple hard rubrics sometimes map to the same universal rubric, inflating disagreement counts. For example, in a postpartum depression prompt, five specific hard rubrics (mentioning combination therapy, medication variation, psychotherapy, urgent care for suicidal thoughts, and healthcare consultation) all mapped to the same universal rubric about ``comprehensive and accurate guidance.'' After deduplication: 7 rubrics reduced to 3 (one per unique universal rubric).
+% \end{itemize}
+% --- End of original bullet-point version ---
+
+% --- Commented out Overleaf content ---
+% Two sets of evaluation:
+% \textbf{Competence evaluation}
+% Using an LLM judge, score from 1-5 the responses in 9 axes:
+% \textit{Clinical}
+% Accuracy of Information
+% Thoroughness of History Taking
+% Logical Triage/Diagnosis
+% Safety and Risk Assessment
+% \textit{Communication}
+% Clarity of Explanation
+% Empathy and Compassion
+% Professionalism and Respect
+% Patient Autonomy (Shared Decision-Making): allow the patient to be part of the decision-making process
+% Reassurance: truthful reassurance without minimizing the patient's concerns
+%
+% \textbf{Universal Rubrics}
+% 37 Criteria and Rubrics generated on top of the HealthBench work.
+% --- End of Overleaf content ---
