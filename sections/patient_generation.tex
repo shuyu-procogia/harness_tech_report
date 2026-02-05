@@ -28,6 +28,7 @@ Each patient record includes:
     \item \textbf{Date of Birth}: Uniformly sampled from the specified date range
     \item \textbf{Age}: Stored in multiple formats: years, months, and combined (e.g., ``2Y5M'' for 2 years 5 months)
 \end{itemize}
+For a complete list of output fields, see Table~\ref{tab:patient_schema}.
 
 \subsubsection{Name Localization}
 
@@ -73,10 +74,6 @@ Height, weight, and BMI come from WHO/CDC pediatric growth reference data:
 \subsubsection{Pregnancy Status}
 
 For females above the age cutoff, pregnancy status is assigned randomly with probability \texttt{p\_preg}. Males and younger females get ``NA''.
-
-\subsubsection{Output Schema}
-
-Table~\ref{tab:patient_schema} lists the output columns.
 \begin{table}[h]
 \centering
 \begin{tabular}{ll}
