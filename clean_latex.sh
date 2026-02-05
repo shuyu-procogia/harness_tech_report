@@ -14,6 +14,6 @@ echo "Cleaning LaTeX auxiliary files in: $SCRIPT_DIR"
 rm -f *.aux *.bcf *.fls *.log *.toc *.out *.bbl *.blg *.run.xml \
       *.fdb_latexmk *.synctex.gz *.synctex *.dvi *.ps \
       *.lof *.lot *.idx *.ind *.ilg *.glo *.gls *.glg \
-      *.nav *.snm *.vrb *.xdv
+      *.nav *.snm *.vrb *.xdv *.bcf-SAVE-ERROR
 
 echo "Cleanup complete."
