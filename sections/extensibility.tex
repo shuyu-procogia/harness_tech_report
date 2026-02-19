@@ -13,5 +13,16 @@ Because the Harness is meant to be inclusive of all health systems around the gl
 We tested the ability of these two providers on 14 African languages.
 
 \subsubsection{Data Preprocessing Extensibility}
+\label{subsubsec:preprocessing_extensibility}
 We have developed a method to parse PDFs, docx, HTML, txt and non-FHIR json files into raw text.
 The raw text is then used in the knowledge extraction step.
+
+Non-FHIR document parsing is implemented in:
+\begin{verbatim}
+python/tool_universe/tooluniverse_parse_non_fhir.py
+\end{verbatim}
+
+This script ingests heterogeneous document formats, including PDF, HTML, DOCX, and semi-structured JSON files. Documents are converted into raw textual representations and passed to ToolUniverse-powered extraction tools, which identify disease entities and associated clinical attributes such as symptoms, diagnosis, management, prognosis, and contraindications.
+
+The output is a disease-centric JSON representation explicitly aligned with the expected input format of the downstream normalization and MCQA generation pipelines, allowing those components to be reused without modification.
+

@@ -12,10 +12,21 @@
 \hypersetup{
     hidelinks
 }
-
+% For forcing diplay of pictures in certain parts of the text
+\usepackage{float}
+% For displaying nested / directory structures
+\usepackage{dirtree}
 % For back-to-TOC links in section titles
 \usepackage{titlesec}
 \newcommand{\toclink}{\hspace{0.5em}{\small\hyperlink{toc}{$\uparrow$}}}
+% To paste LLM prompts as listings
+\usepackage{listings}
+\lstset{
+    breaklines=true,         % This fixes the overflow
+    breakatwhitespace=true,  % Only breaks at spaces to keep words whole
+    frame=single
+}
+
 
 \titleformat{\section}
   {\normalfont\Large\bfseries}{\thesection}{1em}{}[\toclink]
@@ -54,5 +65,6 @@
 % Appendix
 \appendix
 \input{sections/appendix_glossary}
+\input{sections/appendix_prompts}
 
 \end{document}

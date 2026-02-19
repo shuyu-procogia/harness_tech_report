@@ -2,10 +2,17 @@
 % Date: January 21, 2026
 
 \subsection{Question Generation}
-Based on Knowledge graph and synthetic patients, the Harness generates the following:
+Based on the knowledge graph and synthetic patients, the Harness generates clinical vignettes and multiple-choice questions designed to simulate the rigor of medical certification exams. By mapping structured disease data—such as symptoms, diagnosis, and management—to unique patient profiles, the system creates the instruments required to evaluate an LLM ability to apply clinical reasoning to varied scenarios.
 
 \subsubsection{Multiple Choice Question Generation}
-The engine ensures semantic accuracy by deriving relationships directly from the graph topology while employing a hybrid text generation approach (Templates + LLM) for readability.
+Multiple-choice questions (MCQs) are a form of objective assessment where respondents are asked to select the correct answer from a pre-defined list of options. In the medical field, they are highly relevant because they allow for the efficient evaluation of a broad range of clinical knowledge. Because they are standardized and eliminate examiner bias, MCQs provide a reliable metric to ensure that healthcare professionals possess the expertise required for safe clinical practice and are used in many high-stakes medical licensing and certification worldwide.
+
+\begin{verbatim}
+Code: python/simulations/mcqa/neo4j_question_generation.py
+Function: generate_neo4j_questions
+\end{verbatim}
+
+The method built to create MCQs ensures semantic accuracy by deriving relationships directly from the graph topology while employing a hybrid text generation approach (Templates + LLM) for readability.
 
 1. Topic Selection and Traversal Modes
 The system does not generate questions randomly; it operates in controlled batches defined in the $generate_neo4j_questions$ entry point. The engine iterates through specific relationship pairs (e.g., Disease $\rightarrow$ Symptom, Symptom $\rightarrow$ Diagnosis) to ensure a balanced distribution of clinical topics.To support different depths of clinical reasoning, the engine employs two distinct graph traversal modes:
@@ -14,65 +21,143 @@ Transitive Mode (Source $\leftrightarrow$ Disease $\leftrightarrow$ Target): Use
 
 2. Question Stem and Answer Generation
 Once a topic and mode are selected, the QuestionNeoHandler executes a Cypher query to identify a valid Source Node (the context) and a Target Node (the correct answer).
-
-Source Selection: A random pool of nodes matching the source label (e.g., "Symptom") is fetched.
-
-Path Verification:
-
-In Direct Mode, the query verifies an immediate edge exists between Source and Target.
-
-In Transitive Mode, the query anchors on an intermediate Disease node to ensure the Source and Target are clinically related to the same condition.
-
-Context Retrieval: The system captures the specific Disease node responsible for the connection to serve as the "Rationale Context" for the final output.
+\begin{itemize}
+\item Source Selection: A random pool of nodes matching the source label (e.g., "Symptom") is fetched.
+\item Path Verification: In Direct Mode, the query verifies that an immediate edge exists between Source and Target. In Transitive Mode, the query anchors on an intermediate Disease node to ensure the Source and Target are clinically related to the same condition.
+\item Context Retrieval: The system captures the specific Disease node responsible for the connection to serve as the "Rationale Context" for the final output.
+\end{itemize}
 
 3. Distractor Selection Logic
 The validity of an MCQ depends on its distractors being plausible but strictly incorrect. The $get_distractors$ method utilizes graph exclusion logic to mathematically guarantee incorrectness relative to the specific question context.The system selects $N$ distractors using the following logic:
+\begin{itemize}
+\item For Direct Mode: Select nodes of the Target Label (e.g., "Symptoms") that exist in the graph. Exclude any node that has an existing relationship with the current Source Node (Disease).
 
-For Direct Mode: Select nodes of the Target Label (e.g., "Symptoms") that exist in the graph. Exclude any node that has an existing relationship with the current Source Node (Disease).
-
-For Transitive Mode: Identify the specific Disease associated with the correct answer. Select Target Nodes (e.g., "Management") connected to other Diseases. Exclude any Target Node connected to the current context's Disease to prevent "technically correct but alternative" answers.
+\item For Transitive Mode: Identify the specific Disease associated with the correct answer. Select Target Nodes (e.g., "Management") connected to other Diseases. Exclude any Target Node connected to the current context's Disease to prevent "technically correct but alternative" answers.
+\end{itemize}
 
 4. Text Generation: 
 The QuestionBuilder class handles the transformation of raw graph nodes into natural language. It has two modes for this transformation:
+
 Method 1: Hard-Coded Templating (Default)
 The system utilizes a dictionary of pre-validated string templates keyed by relationship pairs (e.g., ("Disease", "Symptom")).
 Input: "Malaria" (Source), "Fever" (Target).Template: "What is one symptom associated with {0}?"Output: "What is one symptom associated with Malaria?"
 
-Method 2: LLM Refinement (Optional)If the $use_llm_questions$ flag is enabled, the system passes the template-generated raw text to a Large Language Model (e.g., GPT-4o or Claude). 
-Role: The LLM does not determine facts or logic. It is strictly used as a "Grammar and Style Engine."
-Process: It receives the raw template question and the clinical entities. It rephrases the stem to sound more natural or clinical.
-Safety: The Correct Answer and Distractors are strictly passed through from the Graph; the LLM is not allowed to halluncinate new medical options.
+Method 2: LLM Refinement (Optional)If the $use_llm_questions$ flag is enabled, the system passes the template-generated raw text to a Large Language Model (e.g., GPT-4o or Claude). The LLM does not determine facts or logic. It is strictly used as a "Grammar and Style Engine." It receives the raw template question and the clinical entities. It rephrases the stem to sound more natural or clinical. The Correct Answer and Distractors are strictly passed through from the Graph; the LLM is not allowed to hallucinate new medical options.
+
+The output of the function is a JSON file containing a list of questions. Each question has the following attributes:
+\begin{figure}[H]
+\caption{MCQ Generation Hierarchy}
+\label{fig:mcq_json_structure}
+\dirtree{%
+.1 /.
+.2 [Question Object].
+.3 package\_name \dots{} \textit{string}.
+.3 topic\_mapping.
+.4 origin\_node \dots{} \textit{string}.
+.4 target\_node \dots{} \textit{string}.
+.4 topic \dots{} \textit{string}.
+.3 question \dots{} \textit{string}.
+.3 answers \dots{} \textit{list[string]}.
+.3 correct\_answer \dots{} \textit{char}.
+.3 rationale \dots{} \textit{string}.
+.3 main\_query \dots{} \textit{string (Cypher)}.
+.3 distractor\_query \dots{} \textit{string (Cypher)}.
+}
+\end{figure}
 
 
-\subsubsection{Vignette Based Question Generation}
+\subsubsection{Vignette-based Question Generation}
+The Harness generates clinical vignettes which are rich narrative-based scenarios that simulate a real-world patient encounter. These vignettes are critical to evaluation of medical knowledge  because they move beyond simple reasoning, requiring the LLM to demonstrate higher-order clinical thought by identifying relevant patterns, making differential diagnoses, and selecting evidence-based management plans within a realistic context.
+
 \begin{verbatim}
-llm.simulations.vignettes.VignetteGenerator
+Code: python/simulations/vignettes/make_vignettes.py
+Class: VignetteGenerator
+Method: generate_questions
 \end{verbatim}
-Inputs:
-Package name (HIV, immunization etc)
-LLM model: a model to call to generate the vignette
-Patient list: a list of patients to create vignettes. One question for each patient. If no list is provided will generate random patients.
 
-Loops over a patient list to generate a question from one of the three topics selected randomly:
-Differential diagnosis, initial management, or next diagnostic step
-Output:
-A list of dictionaries, one dict per question.
+The vignette-based question generation engine operates by generating a set of unique patient profiles corresponding to the requested number of assessment items. For each synthetic patient, the generation pipeline executes the following stages:
+
+\begin{enumerate} 
+\item \textbf{Topic Assignment:} A medical relationship (topic) is randomly sampled from a predefined schema of knowledge graph edges (see Table~\ref{tab:vin_topics}).
+\item \textbf{Graph Traversal:} Relevant nodes are retrieved from the knowledge graph based on the selected topic's origin and target constraints.
+\item \textbf{Narrative Synthesis:} The patient profile, selected graph nodes, and the relational topic are passed to a Large Language Model (LLM) to construct the clinical vignette and the associated multiple-choice question.
+\item \textbf{Validation and Traceability:} To mitigate the risk of LLM hallucinations, the system computes a \textit{traceability score}. This is achieved by calculating the cosine similarity between the semantic embeddings of the source node data and the LLM-generated text, ensuring the output remains grounded in the provided medical evidence.
+\end{enumerate}
+
+\begin{table}
+\raggedright
+\caption{Knowledge Graph Topic Mappings for Vignette-based Question Generation}
+\label{tab:vin_topics}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Origin Node} & \textbf{Target Node} & \textbf{Clinical Topic} \\ \hline
+Diagnosis & Disease & Underlying condition \\ \hline
+Management & Disease & Condition treated \\ \hline
+Symptom & Disease & Underlying condition \\ \hline
+Prognosis & Disease & Condition predicted \\ \hline
+Contraindication & Disease & Condition where caution is needed \\ \hline
+Disease & Symptom & Associated symptoms \\ \hline
+Disease & Prognosis & Expected outcome \\ \hline
+Disease & Contraindication & Necessary precautions \\ \hline
+\end{tabular}
+\end{table}
+
+The output of this method is a JSON file containing a list of questions. Each question has the following attributes:
+
+\begin{figure}[H]
+\caption{Vignette-based Question (VinQA) JSON Hierarchy}
+\label{fig:vinqa_json_structure}
+\dirtree{%
+.1 /.
+.2 [Question Object].
+.3 package\_name \dots{} \textit{string}.
+.3 topic \dots{} \textit{string}.
+.3 topic\_mapping.
+.4 origin\_node \dots{} \textit{string}.
+.4 target\_node \dots{} \textit{string}.
+.4 topic \dots{} \textit{string}.
+.3 origin\_node \dots{} \textit{string (Disease Name)}.
+.3 patient\_profile.
+.4 COUNTRY \dots{} \textit{string}.
+.4 GENDER \dots{} \textit{int}.
+.4 AGE \dots{} \textit{int}.
+.4 BMI \dots{} \textit{float}.
+.3 question \dots{} \textit{string (Clinical Vignette)}.
+.3 reference\_response \dots{} \textit{string}.
+.3 rationale \dots{} \textit{string}.
+.3 source\_items \dots{} \textit{list[string]}.
+.3 reference\_query \dots{} \textit{string (Cypher)}.
+.3 traceability \dots{} \textit{float (Cosine Similarity)}.
+}
+\end{figure}
+
 
 \subsubsection{Multi-Turn Conversation Generation}
-- Simulate patient background
-- LLM receives the patient background and is asked to impersonate patient. Behavior changes with patient age.
-- An LLM health worker agent engages with the patient LLM.
-- Three auxiliary LLMs work on the background handling: conversation closure (to avoid HW and patient for talking indefinitely), and lab results checker and generator (providing realism to the conversation).
-
-Two methods:
-\begin{verbatim}
-llm.simulations.mt_conversations.make_conversation
-\end{verbatim}
-
-Base method for generating a conversation. Each LLM has to be provided as input.
+The Harness system can generate multi-turn conversations that simulate realistic dialogues between a physician and a synthetic patient, where the doctor is played by the model being evaluated. Measuring a virtual doctor’s ability to handle these interactions is vital because clinical practice is rarely a single-step event; it requires the physician to refine their diagnosis over time, react to new patient information or treatment side effects, and maintain diagnostic accuracy across a longitudinal sequence of clinical decisions.
 
 \begin{verbatim}
-llm.simulations.mt_conversations. simulate_conversation_default
+Code: python/simulations/mt_conversations/sim_conv.py
+function: make_conversation_default
 \end{verbatim}
 
-Instead, only pass the LLM to play the part of the health worker. All the other components are defaulted.
+The multi-turn conversation generation engine operates by creating a set of unique patient demographic profiles corresponding to the requested number of assessment items. For each synthetic patient, the generation pipeline executes the following stages:
+
+\begin{enumerate} 
+\item \textbf{Background Synthesis:} To move beyond basic demographics, an LLM-based medical scribe expands the initial vignette into a comprehensive patient history. This stage enriches the profile with Social History (SHx), Review of Systems (ROS), and Social Determinants of Health (SDOH), ensuring the dialogue is grounded in a clinically plausible context. The full prompt is shown in Listing~\ref{list:scribe_prompt}.
+
+\item \textbf{Age-Dependent Patient Emulation:} A dedicated LLM agent impersonates the patient or their proxy. The agent's persona is governed by a conditional age-logic: 
+    \begin{itemize} 
+    \item \textbf{Pediatric (age less than 12):} The LLM adopts the persona of a guardian. Prompt in Listing~\ref{list:guardian_prompt}.
+    \item \textbf{Adolescent (12 to 15):} The persona is a hybrid of both guardian and patient. Prompt in Listing~\ref{list:mixed_guardian_patient_prompt}.
+    \item \textbf{Adult (age greater than 15):} The LLM fully impersonates the patient. Prompt in Listing~\ref{list:patient_prompt}.
+    \end{itemize}
+
+\item \textbf{Provider Simulation:} A secondary LLM agent acts as a healthcare worker (HW), engaging the patient agent in a structured clinical interview to assess diagnostic and communication skills. 
+\item \textbf{Auxiliary Logic:} Three specialized auxiliary agents manage the conversation's lifecycle: 
+    \begin{itemize} 
+    \item \textbf{Closure Agent:} Monitors dialogue flow to prevent infinite loops and ensure logical termination. 
+    \item \textbf{Lab Results Generator:} Synthesizes realistic laboratory data based on the clinical state.
+    \item \textbf{Lab Results Checker:} Validates that generated lab data remains consistent with the underlying knowledge graph. 
+    \end{itemize} 
+\end{enumerate}
+
