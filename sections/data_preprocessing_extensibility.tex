@@ -1,0 +1,86 @@
+% Author: Shuyu Fan, MSc
+% Date: February 20, 2026
+
+\subsubsection{Data Preprocessing Extensibility}
+\label{subsubsec:preprocessing_extensibility}
+The Harness knowledge base pipeline was originally designed around WHO SMART Guidelines distributed as FHIR (Fast Healthcare Interoperability Resources) artifacts. To support clinical content from other sources, we developed a parallel non-FHIR ingestion pathway that accepts common document formats and produces the same structured output used by the normalization and question generation pipelines.
+
+\paragraph{Document Ingestion and Text Extraction}
+The entry point for non-FHIR content is an extraction module that recursively scans an input directory and dispatches each file to a parser based on its extension.
+
+\begin{verbatim}
+Code: python/info_extraction/non_fhir_extraction.py
+Function: extract_records_from_path
+\end{verbatim}
+
+Supported formats and their parsers:
+\begin{itemize}
+\item \textbf{PDF} -- Page-level text extraction via \texttt{pypdf}. Heading detection splits pages into topical sections before rechunking.
+\item \textbf{DOCX} -- Paragraph and table extraction via \texttt{python-docx}. Table rows are flattened into pipe-delimited strings.
+\item \textbf{HTML/HTM} -- Heading, paragraph, and list-item extraction via \texttt{BeautifulSoup}. Script, style, navigation, and footer elements are removed.
+\item \textbf{TXT} -- Paragraph-level splitting on blank-line boundaries.
+\item \textbf{JSON} -- A recursive string harvester that collects all string values from arbitrarily nested JSON structures, with deduplication.
+\end{itemize}
+
+After format-specific parsing, all extracted text passes through an overlapped rechunking step. The rechunker normalizes whitespace, produces chunks of up to 1,200 characters with 200-character overlap between consecutive chunks, and selects break points using a priority order of boundary characters (newline, period, semicolon, colon, comma, space). Because every format goes through the same rechunker, downstream components receive chunks of consistent size and structure.
+
+Each chunk is represented as a \texttt{RawTextRecord} containing the source file path, chunk text, file extension, and per-file chunk index. The records are serialized to a JSONL file where each line contains:
+\begin{verbatim}
+{
+  "source": "<file path>",
+  "chunk_index": <global int>,
+  "text": "<chunk text>",
+  "meta": {"ext": ".pdf", "chunk_index_in_file": 0}
+}
+\end{verbatim}
+
+\paragraph{LLM-Based Structured Extraction}
+A ToolUniverse-backed extraction pipeline reads the chunked text and uses an LLM to identify diseases and extract structured clinical attributes.
+
+\begin{verbatim}
+Code: python/tool_universe/tooluniverse_parse_non_fhir.py
+Function: main
+\end{verbatim}
+
+Chunks are grouped by source file and processed in configurable batches (default: 20 chunks per batch). For each batch, the combined text is passed to a \texttt{Harness\_Disease\_Extractor} AgenticTool configured with a structured prompt that instructs the LLM to return strict JSON conforming to the target schema:
+\begin{verbatim}
+{
+  "<Disease Name>": {
+    "importance": {"value": <number|null>,
+                   "confidence": <0..1>},
+    "symptoms":    {"values": [...], "confidence": <0..1>},
+    "management":  {"values": [...], "confidence": <0..1>},
+    "diagnosis":   {"values": [...], "confidence": <0..1>},
+    "prognosis":   {"values": [...], "confidence": <0..1>},
+    "contraindications": {"values": [...],
+                          "confidence": <0..1>}
+  }
+}
+\end{verbatim}
+
+The extraction prompt requires concise noun phrases (3--4 words maximum) and case-insensitive deduplication. It also specifies a confidence scoring guide: 0.9--1.0 for information explicitly stated multiple times, 0.6--0.8 for information clearly stated once, 0.3--0.5 for implied evidence, and below 0.3 for weak or absent evidence.
+
+The LLM provider is configurable via environment variables, supporting Gemini (default: Gemini 2.5 Pro) and OpenRouter. The LLM output is post-processed through schema normalization that clamps confidence scores to [0, 1], deduplicates and lowercases list values, and merges results across batches for the same disease.
+
+\paragraph{Lineage Tracking}
+The pipeline generates a separate lineage JSON file that maps each extracted value back to its source documents and chunk indices:
+\begin{verbatim}
+{
+  "<Disease Name>": {
+    "<field>": {
+      "<extracted value>": [
+        {"source": "<file path>",
+         "chunk_indices": [0, 1, 3]}
+      ]
+    }
+  }
+}
+\end{verbatim}
+
+This lineage is carried through into the Neo4j knowledge graph, so every fact in the graph can be traced back to its original source document and specific text chunks.
+
+\paragraph{Downstream Integration}
+The non-FHIR extraction pipeline outputs a disease-centric JSON that is structurally identical to the FHIR-based pipeline's output. The normalization, Neo4j ingestion, and question generation components therefore work the same way whether the source content is a WHO SMART Guideline FHIR artifact or a PDF from an external clinical resource.
+
+\paragraph{Adding New Document Formats}
+To add a new format, a developer writes a parser function (e.g., \texttt{\_parse\_epub}) and registers it in the file dispatcher in \texttt{non\_fhir\_extraction.py}. The parser returns a list of text strings; the rechunker and all downstream components handle the rest.

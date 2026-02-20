@@ -1,0 +1,93 @@
+% Author: Shuyu Fan, MSc
+% Date: February 20, 2026
+
+\subsubsection{Multi-Language Support}
+Because the Harness is meant to be inclusive of all health systems around the globe, we developed a translation framework that integrates commercial translation services into the Harness pipeline. Translations can be applied on top of any generated content -- MCQAs, clinical vignettes, and multi-turn conversations -- so that LLMs can be evaluated in languages they do not natively support.
+
+\paragraph{Architecture}
+The translation framework is built around an abstract \texttt{BaseTranslator} class that defines a common interface for all translation operations: single-text translation, batch translation, automatic language detection, and round-trip translation for quality evaluation.
+
+\begin{verbatim}
+Code: python/translation/translators/base.py
+Class: BaseTranslator
+Methods: translate, translate_batch, detect_language,
+         round_trip_translate, validate_language_support,
+         get_supported_languages, estimate_cost
+\end{verbatim}
+
+Three concrete implementations are provided:
+\begin{itemize}
+\item \textbf{Azure AI Translator} -- Supports 85+ languages at \$10 per million characters. Includes special handling for Chinese variants (zh-Hans, zh-Hant).
+\item \textbf{Google Cloud Translation v3} -- Supports 110+ languages at \$20 per million characters. Uses service account authentication.
+\item \textbf{Google Translate API v2} -- Alternative Google implementation using API key authentication with the same language coverage.
+\end{itemize}
+
+A \texttt{TranslationManager} class sits on top of these translators. It routes requests to the selected service, retries failed calls with exponential backoff, and falls back to an alternative service if the primary one fails.
+
+\begin{verbatim}
+Code: python/translation/translators/manager.py
+Class: TranslationManager
+\end{verbatim}
+
+All languages are identified using ISO 639-1 codes (e.g., \texttt{sw} for Swahili, \texttt{am} for Amharic). The system is configured through a \texttt{TranslationConfig} dataclass that specifies source language, target languages, API credentials, and processing parameters such as chunk size, retry limits, and rate limiting delays.
+
+\paragraph{Medical Corpora}
+The framework includes corpus loaders for medical text, each implementing a \texttt{BaseCorpusLoader} abstract class:
+\begin{itemize}
+\item \textbf{MMedBench} (Henrychur/MMedBench) -- A medical MCQA dataset containing 53,566 questions across 6 languages (English (EN), Chinese (ZH), Japanese (JA), French (FR), Russian (RU), Spanish (ES)). English questions are extracted and translated into target languages to measure comprehension preservation.
+\item \textbf{AFRIDOC-MT} (masakhane/AfriDocMT) -- A document-level medical translation corpus containing 10,000 health domain sentences across 334 WHO documents, with professional human reference translations for 5 African languages (Amharic, Hausa, Swahili, Yoruba, Zulu).
+\item \textbf{MedDialog} -- Medical conversation corpus for testing translation of clinical dialogue.
+\item \textbf{Generic Text Loader} -- Accepts JSON, CSV, and plain text files for custom corpora.
+\end{itemize}
+
+\begin{verbatim}
+Code: python/translation/loaders/
+Classes: MMedBenchLoader, AfriDocLoader, MedDialogLoader,
+         TextCorpusLoader
+\end{verbatim}
+
+\paragraph{Quality Evaluation}
+Translation quality is assessed through round-trip testing: text is translated from the source language (English) to the target language and back to English. The back-translated text is compared against the original using BLEU scores (1-gram through 4-gram) computed with the \texttt{sacrebleu} library. Results are categorized into standardized quality tiers:
+
+\begin{table}[H]
+\centering
+\caption{Translation Quality Thresholds}
+\label{tab:translation_quality}
+\begin{tabular}{|l|l|}
+\hline
+\textbf{Category} & \textbf{BLEU Score Range} \\ \hline
+Excellent & $\geq 0.85$ \\ \hline
+Good & $\geq 0.70$ \\ \hline
+Fair & $\geq 0.50$ \\ \hline
+Poor & $< 0.50$ \\ \hline
+\end{tabular}
+\end{table}
+
+\begin{verbatim}
+Code: python/translation/evaluation/round_trip_tester.py
+Class: RoundTripTester
+Methods: test_single, test_corpus, test_multiple_languages
+\end{verbatim}
+
+Each round-trip test records BLEU scores, forward and backward latencies, character counts, and cost estimates. A usage tracker enforces API character limits (e.g., Azure's 2 million character free tier) and supports resuming partially completed test runs.
+
+\paragraph{African Language Focus}
+Because many WHO health contexts involve low-resource African languages, we tested the framework on 15 African languages via Azure (Afrikaans, Amharic, Hausa, Igbo, Malagasy, Chichewa, Kinyarwanda, Shona, Somali, Sesotho, Swahili, Tigrinya, Xhosa, Yoruba, Zulu) and 35+ African languages via Google, which additionally covers Bambara, Ewe, Luganda, Lingala, and others.
+
+\paragraph{Command-Line Interface}
+The translation tests are run from the command line. Languages, services, and corpora can be combined freely:
+\begin{verbatim}
+Code: python/translation/run_translation_test.py
+
+# Test single language with single service
+python -m translation.run_translation_test \
+    -l sw -s google -c mmedbench
+
+# Test multiple languages with both services
+python -m translation.run_translation_test \
+    -l sw,zu,xh -s azure,google -c mmedbench
+
+# Test all Google-supported African languages
+python -m translation.run_translation_test \
+    --all-google-african -s google -c mmedbench
+\end{verbatim}
