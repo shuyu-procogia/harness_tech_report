@@ -1,0 +1,349 @@
+% Author: Shuyu Fan, MSc
+% Date: March 19, 2026
+
+\subsection{Constructing the FHIR-Based Knowledge Base}
+This section describes the pipeline for constructing a clinical knowledge graph from WHO SMART Guidelines FHIR packages (HIV v0.4.4 and Immunization v0.2.0). No LLM is used in the extraction step. All nodes and edges are derived from structured FHIR artifacts---ValueSets, CodeSystems, StructureDefinitions, CQL Libraries, and PlanDefinitions---via rule-based parsers. Every node and edge traces to specific FHIR source files.
+
+\subsubsection{Pipeline Architecture}
+
+The pipeline processes FHIR JSON files through six sequential phases:
+
+\begin{enumerate}
+    \item \textbf{FHIR Reading}: Parses raw FHIR JSON files into indexed representations (CodeSystemIndex, ValueSetIndex, StructureDefinition bindings).
+    \item \textbf{CQL Parsing}: Extracts staging rules, screening rules, symptom groups, and concept references from CQL decision table Libraries. PlanDefinition references are used to discover Libraries, with name-pattern fallback and cross-validation.
+    \item \textbf{Concept Classification}: Categorizes concepts into clinical types (Symptom, Diagnosis, Management, Prognosis, Contraindication, Vaccine, Outcome, Admin) using StructureDefinition element bindings and title-keyword matching.
+    \item \textbf{ICD-11 Enrichment}: Attaches ICD-11 codes, categories, and definitions to disease nodes.
+    \item \textbf{Resolution and Enrichment}: Assembles disease bundles, vaccine bundles, WHO staging nodes, screening edges, symptom taxonomy, exclusivity scores, diagnostic test preferences, and conditional treatment context nodes.
+    \item \textbf{Neo4j Loading}: Exports the assembled graph into a Neo4j database with full provenance metadata.
+\end{enumerate}
+
+\begin{verbatim}
+FHIR JSON files (WHO SMART Guidelines)
+    |
+Phase 1: parsers/fhir_reader.py -> CodeSystemIndex, ValueSetIndex, SD bindings
+    |
+Phase 2: parsers/cql_parser.py -> staging rules, screening rules, symptom groups
+         PlanDefinition-based Library discovery (with name-pattern fallback)
+    |
+Phase 3: parsers/valueset_classifier.py -> categorize concepts
+         (Symptom/Diagnosis/Management/Prognosis/Contraindication/
+          Vaccine/Outcome/Admin)
+    |
+Phase 4: icd11/icd11_enricher.py -> ICD-11 codes, categories, definitions
+    |
+Phase 5: resolvers/disease_resolver.py -> DiseaseBundle objects
+         resolvers/vaccine_resolver.py -> Vaccine/CI bundles (immunization)
+         resolvers/staging_builder.py -> WHO staging nodes + edges
+         resolvers/screening_builder.py -> screening edges
+         resolvers/symptom_taxonomy.py -> SymptomCategory nodes
+         resolvers/edge_enrichment.py -> exclusivity scores + diagnostic pref.
+         resolvers/treatment_context_builder.py -> TreatmentContext nodes
+    |
+Phase 6: export/neo4j_loader.py -> Neo4j graph database
+\end{verbatim}
+
+Design decisions:
+\begin{itemize}
+    \item \textbf{Deterministic parsing}: No LLM or embedding similarity. Every fact is rule-derived from structured FHIR artifacts.
+    \item \textbf{Package isolation}: Each FHIR package loads with its own \texttt{ownerId}.
+    \item \textbf{Full provenance}: Every node tracks \texttt{source\_files}, \texttt{fhir\_code}, and \texttt{classification\_source}. Every edge tracks \texttt{source\_file}, \texttt{derivation}, \texttt{source\_rule}, and \texttt{source\_packages}.
+    \item \textbf{Package-specific configuration}: \texttt{packages/hiv.py} and \texttt{packages/immunization.py} hold disease rules, exclusion lists, treatment context rules, and diagnostic preferences. No package-specific logic resides in core pipeline code.
+\end{itemize}
+
+\subsubsection{FHIR Source Data}
+
+\paragraph{HIV Package (v0.4.4)}
+The ImplementationGuide references 645 resources, of which 513 have matching JSON files on disk. 132 are missing (Measures, ActorDefinitions, example resources), which is expected for a draft package. Table~\ref{tab:hiv_fhir_resources} summarizes resource usage.
+
+\begin{table}[H]
+\centering
+\caption{HIV FHIR Package Resource Usage}
+\label{tab:hiv_fhir_resources}
+\begin{tabular}{l r l}
+\hline
+\textbf{Resource Type} & \textbf{Files} & \textbf{Used in Neo4j?} \\
+\hline
+ValueSet & 268 & Yes (primary concept source) \\
+Library & 109 & Yes (3 DT libraries) \\
+StructureDefinition & 63 & Yes (classification refinement) \\
+Questionnaire & 56 & No (data-entry forms) \\
+PlanDefinition & 11 & Library discovery entry point \\
+ExampleScenario & 3 & No \\
+ActivityDefinition & 2 & No \\
+ImplementationGuide & 1 & No (auditing only) \\
+CodeSystem & 1 & Yes (code-to-display lookup) \\
+\hline
+\textbf{Total} & \textbf{514} & \textbf{452 (88\%)} \\
+\hline
+\end{tabular}
+\end{table}
+
+HIV codes follow the structure \texttt{HIV.\{Section\}.DE\{Number\}}, where sections span Registration (A), HTS Visit (B), PrEP/PEP Visit (C), Care \& Treatment (D), PMTCT (E), Diagnostics (G), and Follow-up (H).
+
+\paragraph{Immunization Package (v0.2.0)}
+
+\begin{table}[H]
+\centering
+\caption{Immunization FHIR Package Resource Usage}
+\label{tab:imm_fhir_resources}
+\begin{tabular}{l r l}
+\hline
+\textbf{Resource Type} & \textbf{Files} & \textbf{Used in Neo4j?} \\
+\hline
+Library & 280 & Yes (eligibility, CI, schedules) \\
+PlanDefinition & 139 & Library discovery entry point \\
+ValueSet & 97 & Yes \\
+ActivityDefinition & 43 & No \\
+Measure & 41 & No (monitoring indicators) \\
+StructureDefinition & 23 & Yes \\
+StructureMap & 16 & No \\
+Questionnaire & 10 & No \\
+CodeSystem & 9 & Yes \\
+ConceptMap & 3 & Yes (ICD-11/SNOMED/ATC codes) \\
+ImplementationGuide & 1 & No (auditing only) \\
+\hline
+\textbf{Total} & \textbf{662} & \textbf{409 (62\%)} \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{Classification Pipeline}
+
+Raw FHIR concepts are categorized into graph nodes in five steps.
+
+\paragraph{Step 1: ValueSet Classification}
+Each ValueSet's concepts are classified using two methods:
+\begin{enumerate}
+    \item \textbf{SD-Element Binding} (preferred): StructureDefinition element paths and short descriptions provide context. Multi-word phrases take priority (e.g., ``treatment outcome'' maps to Outcome, not Management; ``viral load test'' maps to Diagnosis, not Prognosis).
+    \item \textbf{Title-Keyword Matching} (fallback): Scans ValueSet titles for category keywords.
+\end{enumerate}
+All concepts within a ValueSet receive the same category. The concept \texttt{display} value becomes the node name (lowercase) but does not influence classification.
+
+\paragraph{Step 2: Disease Assignment}
+14 rules in \texttt{hiv.py} map ValueSet title keywords to diseases. Order matters---first match wins. HIV is last as the broadest match. Prevention programs (PrEP, PEP) have \texttt{disease\_type: "prevention\_program"}.
+
+\paragraph{Step 3: OI Reclassification}
+38 opportunistic infections are reclassified from Symptom to Disease based on WHO staging guidelines (2021). Not all staging conditions are reclassified---e.g., oral hairy leukoplakia remains a Symptom (sign of immunosuppression, not an independent disease). Each reclassified OI carries \texttt{reclassified\_from} and \texttt{reclassified\_by} provenance fields.
+
+\paragraph{Step 4: Exclusion Filtering}
+154 terms are excluded from the active graph (13 base + 141 HIV-specific). Excluded concepts are captured with reasons rather than silently dropped. Exclusion categories include drug abbreviations, staging labels, workflow terms, diagnostic junk, and risk factors. Outcome and Admin categories bypass the exclusion filter.
+
+\paragraph{Step 5: Edge Enrichment}
+\begin{itemize}
+    \item \textbf{Exclusivity}: Computed as $1 / \mathrm{disease\_count}$ for each symptom and diagnosis. High exclusivity scores are partly an artifact of the small graph: with only 38 diseases---and most reclassified OIs lacking independent symptom or diagnosis data in FHIR---many concepts appear linked to only one disease.
+    \item \textbf{Diagnostic preference}: WHO-recommended test preference (e.g., NAAT is preferred for STIs). Manually curated in \texttt{hiv.py} because FHIR does not contain preference information.
+    \item \textbf{Stage-to-treatment mapping}: FHIR lists WHO HIV clinical stages and cervical cancer stages but does not map which OIs belong to which stage or which treatments apply to which stage. These mappings are manually curated from WHO and FIGO guidelines in \texttt{hiv.py}.
+\end{itemize}
+
+\subsubsection{Knowledge Graph Schema}
+
+The pipeline produces one graph schema per FHIR package. The HIV package has 387 nodes and 689 edges; the Immunization package has 192 nodes and 342 edges.
+
+\paragraph{HIV Graph Schema}
+\begin{verbatim}
+                                        DiseaseCategory
+                                            ^ IS_SUBTYPE_OF
+                                            |
+    SymptomCategory                     Disease <--- HAS_COINFECTION --> Disease
+        ^ IN_CATEGORY                 /   |   |   \   \
+        |                            /    |   |    \   \
+    Symptom <-- HAS_SYMPTOM              |   |     \   INDICATES_UNDERLYING -> Disease
+        ^                                 |   |      \
+HAS_SYMPTOM                               |   |       HAS_CONTRAINDICATION -> Contraindication
+        |                                 |   |
+    Stage                                 |   HAS_DIAGNOSIS -> Diagnosis
+        |                                 |   |
+HAS_STAGING_CONDITION -> Disease          |   HAS_MANAGEMENT -> Management
+        |                                 |   |
+HAS_CONTEXT -> PatientContext             |   HAS_OUTCOME -> Outcome
+                                          |   |
+                                          |   HAS_TREATMENT_CONTEXT
+                                          |           |
+                                          |       TreatmentContext
+                                          |           |
+                                          |       RECOMMENDS -> Management
+\end{verbatim}
+
+\paragraph{Immunization Graph Schema}
+\begin{verbatim}
+            DiseaseCategory
+                ^ IS_SUBTYPE_OF
+                |
+            Disease <-- PREVENTS -- Vaccine
+                                        |
+                                        IS_SUBTYPE_OF -> VaccineFamily
+                                        |
+                                        HAS_CONTRAINDICATION -> Contraindication
+                                                                      |
+                                                              IS_SUBTYPE_OF
+                                                                      |
+                                                            ContraindicationCategory
+\end{verbatim}
+
+\paragraph{HIV Node and Edge Counts}
+
+\begin{table}[H]
+\centering
+\caption{HIV Package Node Counts}
+\label{tab:hiv_nodes}
+\begin{tabular}{l r l}
+\hline
+\textbf{Label} & \textbf{Count} & \textbf{Source} \\
+\hline
+Symptom & 85 & ValueSet classification \\
+DiseaseCategory & 82 & ICD-11 enrichment \\
+Management & 75 & ValueSet classification \\
+Diagnosis & 54 & ValueSet classification \\
+Disease & 38 & DISEASE\_VS\_RULES + OI reclassification \\
+TreatmentContext & 22 & WHO guidelines + condition-scope auto-detection \\
+SymptomCategory & 12 & Symptom taxonomy \\
+Outcome & 6 & ValueSet classification (TB treatment outcomes) \\
+Contraindication & 5 & ValueSet + CQL D5.DT \\
+Stage & 4 & CQL D15.DT \\
+PatientContext & 4 & CQL extraction \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{HIV Package Edge Counts}
+\label{tab:hiv_edges}
+\begin{tabular}{l l r}
+\hline
+\textbf{Relationship} & \textbf{Source $\rightarrow$ Target} & \textbf{Count} \\
+\hline
+IS\_SUBTYPE\_OF & DiseaseCategory $\rightarrow$ DiseaseCategory & 145 \\
+HAS\_SYMPTOM & Disease $\rightarrow$ Symptom & 119 \\
+HAS\_MANAGEMENT & Disease $\rightarrow$ Management & 79 \\
+HAS\_DIAGNOSIS & Disease $\rightarrow$ Diagnosis & 65 \\
+IN\_CATEGORY & Symptom $\rightarrow$ SymptomCategory & 60 \\
+HAS\_SYMPTOM & Stage $\rightarrow$ Symptom & 55 \\
+IS\_SUBTYPE\_OF & Disease $\rightarrow$ DiseaseCategory & 39 \\
+RECOMMENDS & TreatmentContext $\rightarrow$ Management & 32 \\
+INDICATES\_UNDERLYING & Disease $\rightarrow$ Disease (OI $\rightarrow$ parent) & 27 \\
+HAS\_STAGING\_CONDITION & Stage $\rightarrow$ Disease (OI) & 25 \\
+HAS\_TREATMENT\_CONTEXT & Disease $\rightarrow$ TreatmentContext & 22 \\
+HAS\_CONTEXT & Stage $\rightarrow$ PatientContext & 7 \\
+HAS\_OUTCOME & Disease $\rightarrow$ Outcome & 6 \\
+HAS\_CONTRAINDICATION & Disease $\rightarrow$ Contraindication & 5 \\
+HAS\_COINFECTION & Disease $\rightarrow$ Disease & 3 \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Immunization Node and Edge Counts}
+
+\begin{table}[H]
+\centering
+\caption{Immunization Package Node Counts}
+\label{tab:imm_nodes}
+\begin{tabular}{l r l}
+\hline
+\textbf{Label} & \textbf{Count} & \textbf{Source} \\
+\hline
+DiseaseCategory & 64 & ICD-11 enrichment \\
+Vaccine & 36 & ValueSet classification \\
+VaccineFamily & 28 & Vaccine hierarchy config \\
+Disease & 26 & VACCINE\_DISEASE\_MAP config \\
+Contraindication & 23 & CQL D5.DT + CodeSystem \\
+ContraindicationCategory & 15 & CI hierarchy config \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Immunization Package Edge Counts}
+\label{tab:imm_edges}
+\begin{tabular}{l l r}
+\hline
+\textbf{Relationship} & \textbf{Source $\rightarrow$ Target} & \textbf{Count} \\
+\hline
+IS\_SUBTYPE\_OF & DiseaseCategory $\rightarrow$ DiseaseCategory & 113 \\
+HAS\_CONTRAINDICATION & Vaccine $\rightarrow$ Contraindication & 83 \\
+PREVENTS & Vaccine $\rightarrow$ Disease & 44 \\
+IS\_SUBTYPE\_OF & Vaccine $\rightarrow$ VaccineFamily & 43 \\
+IS\_SUBTYPE\_OF & Disease $\rightarrow$ DiseaseCategory & 33 \\
+HAS\_SYMPTOM & Disease $\rightarrow$ Symptom & 26 \\
+IS\_SUBTYPE\_OF & Contraindication $\rightarrow$ ContraindicationCategory & 23 \\
+\hline
+\end{tabular}
+\end{table}
+
+\paragraph{Edge Properties}
+Edges carry metadata used by MCQA generation:
+
+\begin{table}[H]
+\centering
+\caption{Edge Property Summary}
+\label{tab:edge_props}
+\begin{tabular}{l l l l}
+\hline
+\textbf{Property} & \textbf{On Edge Type} & \textbf{Values} & \textbf{Source} \\
+\hline
+exclusivity & HAS\_SYMPTOM, HAS\_DIAGNOSIS & 0.0--1.0 & Computed from graph \\
+preference & HAS\_DIAGNOSIS & preferred/alternative/available & Manual (hiv.py) \\
+condition\_scope & HAS\_MANAGEMENT & e.g., ``cervical precancer'' & CONDITION\_SCOPE\_RULES \\
+who\_stage & INDICATES\_UNDERLYING & WHO HIV clinical stage 2/3/4 & OI\_WHO\_STAGE (hiv.py) \\
+age\_condition & HAS\_SYMPTOM (Stage) & Age $\geq$ 15 / Age $<$ 15 & D15 CQL \\
+vaccine\_type & on Vaccine nodes & live / inactivated & immunization.py \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsubsection{TreatmentContext Model}
+
+TreatmentContext is an intermediate node between Disease and Management. It represents a clinical condition under which a specific treatment is recommended---for example, ``In an HIV patient with HBV coinfection, which ART regimen is preferred?'' A flat disease-treatment schema cannot express this.
+
+TreatmentContext nodes are derived from two sources:
+\begin{enumerate}
+    \item \textbf{Auto-detected contexts} (\texttt{build\_condition\_scope\_contexts}): Scans disease bundles for edges with \texttt{condition\_scope} properties and creates TreatmentContext nodes automatically. Currently produces 2 nodes (cervical precancer, invasive cervical cancer).
+    \item \textbf{Manual rules} (\texttt{hiv.py TREATMENT\_CONTEXT\_RULES}): 20 rules covering HIV ART regimens (coinfection, pregnancy, treatment failure, toxicity) and cervical cancer staging (e.g., Stage IA $\rightarrow$ conization, Stage IIB+ $\rightarrow$ chemoradiation).
+\end{enumerate}
+
+\subsubsection{FHIR Data Gaps and Manual Curation}
+
+The WHO FHIR packages are clinical guideline tools, not comprehensive disease databases. Several gaps required manual curation:
+
+\begin{table}[H]
+\centering
+\caption{FHIR Data Gaps Requiring Manual Curation}
+\label{tab:fhir_gaps}
+\begin{tabular}{p{3cm} p{3.5cm} p{3.5cm} p{3.5cm}}
+\hline
+\textbf{Gap} & \textbf{FHIR Data Available} & \textbf{What's Missing} & \textbf{Manual Fix} \\
+\hline
+ART regimen line assignments & DE83 (line categories), DE90 (36 regimens) & DE77--DE81 (preferred/alternative) empty & WHO 2021 guidelines in hiv.py \\
+Cervical cancer stage-to-treatment & DE712 (Stage 0--IV), DE719/DE731 (procedures) & No mapping between stages and procedures & WHO/FIGO/NCCN guidelines in hiv.py \\
+HBV/HCV treatment & DE168/DE177 (treatment regimen prescribed) & Empty (0 concepts) & Handled via coinfection TreatmentContext \\
+Diagnostic test preference & DE284 (test types listed) & No explicit ``preferred'' flag & WHO guidelines in DIAGNOSTIC\_TEST\_PREFERENCE \\
+\hline
+\end{tabular}
+\end{table}
+
+Other data limitations:
+\begin{itemize}
+    \item \textbf{HIV package}: Most of the 38 diseases are STIs and opportunistic infections tightly connected to HIV through shared transmission routes. These diseases have limited independent clinical data in FHIR---their symptoms and treatments are mainly used for WHO staging, not as standalone disease profiles.
+    \item \textbf{Immunization package}: 26 diseases exist only as vaccine targets. No symptoms, treatments, or diagnostic tests are available for any disease. Questions are limited to vaccine-disease and vaccine-contraindication relationships.
+    \item \textbf{Both packages}: Draft versions with some empty ValueSets (e.g., ART regimen line assignments DE77--DE81, HBV/HCV treatment). Stage-to-treatment mappings and diagnostic test preferences are not in FHIR and required manual curation.
+\end{itemize}
+
+\subsubsection{Neo4j Ingestion}
+
+Graph ingestion is implemented as the final pipeline phase:
+\begin{verbatim}
+Code: export/neo4j_loader.py
+\end{verbatim}
+
+The loader creates nodes with 16 labels and typed relationships per the graph schema. Every node carries:
+\begin{itemize}
+    \item \texttt{name} (lowercase)---the concept display name
+    \item \texttt{ownerId}---package identifier (\texttt{hiv\_package} or \texttt{immunization\_package})
+    \item \texttt{source}---provenance type (\texttt{fhir}, \texttt{icd11}, \texttt{both}, \texttt{who\_guidelines}, or \texttt{config})
+    \item \texttt{source\_files}---list of FHIR filenames that contributed to the node
+\end{itemize}
+
+Disease nodes also carry ICD-11 metadata: \texttt{icd11\_code}, \texttt{icd11\_title}, \texttt{definition}, \texttt{aliases}, \texttt{icd11\_synonyms}, and hierarchical classification fields (\texttt{icd11\_chapter}, \texttt{icd11\_block}, \texttt{icd11\_sub\_block}).
+
+The ingestion runs locally and supports incremental updates.

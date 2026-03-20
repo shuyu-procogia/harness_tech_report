@@ -9,4 +9,7 @@
 *.toc
 *.fls
 *.fdb_latexmk
+*.bcf
+*.bcf-SAVE-ERROR
+*.run.xml
 Test_Harness_Technical_Report/
