@@ -14,6 +14,11 @@
 }
 % For forcing diplay of pictures in certain parts of the text
 \usepackage{float}
+% For landscape pages
+\usepackage{pdflscape}
+% For TikZ diagrams
+\usepackage{tikz}
+\usetikzlibrary{positioning, arrows.meta, calc}
 % For displaying nested / directory structures
 \usepackage{dirtree}
 % For back-to-TOC links in section titles
@@ -51,6 +56,7 @@
 \input{sections/background}
 
 \section{Project Development}
+%\input{sections/knowledge_base}
 \input{sections/knowledge_base_fhir}
 \input{sections/patient_generation}
 \input{sections/question_generation}

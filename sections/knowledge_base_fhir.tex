@@ -2,7 +2,7 @@
 % Date: March 19, 2026
 
 \subsection{Constructing the FHIR-Based Knowledge Base}
-This section describes the pipeline for constructing a clinical knowledge graph from WHO SMART Guidelines FHIR packages (HIV v0.4.4 and Immunization v0.2.0). No LLM is used in the extraction step. All nodes and edges are derived from structured FHIR artifacts---ValueSets, CodeSystems, StructureDefinitions, CQL Libraries, and PlanDefinitions---via rule-based parsers. Every node and edge traces to specific FHIR source files.
+The clinical knowledge graph is constructed from WHO SMART Guidelines FHIR packages (HIV v0.4.4 and Immunization v0.2.0). No LLM is used in the extraction step. All nodes and edges are derived from structured FHIR artifacts---ValueSets, CodeSystems, StructureDefinitions, CQL Libraries, and PlanDefinitions---via rule-based parsers. Every node and edge traces to specific FHIR source files.
 
 \subsubsection{Pipeline Architecture}
 
@@ -136,49 +136,120 @@ All concepts within a ValueSet receive the same category. The concept \texttt{di
 \end{itemize}
 
 \subsubsection{Knowledge Graph Schema}
+\label{sec:kg_schema}
 
-The pipeline produces one graph schema per FHIR package. The HIV package has 387 nodes and 689 edges; the Immunization package has 192 nodes and 342 edges.
+The pipeline produces one graph schema per FHIR package. The HIV package has 387 nodes and 689 edges; the Immunization package has 192 nodes and 342 edges. The node and edge counts are detailed in Tables~\ref{tab:hiv_nodes}--\ref{tab:imm_edges} following the schema diagrams.
 
-\paragraph{HIV Graph Schema}
-\begin{verbatim}
-                                        DiseaseCategory
-                                            ^ IS_SUBTYPE_OF
-                                            |
-    SymptomCategory                     Disease <--- HAS_COINFECTION --> Disease
-        ^ IN_CATEGORY                 /   |   |   \   \
-        |                            /    |   |    \   \
-    Symptom <-- HAS_SYMPTOM              |   |     \   INDICATES_UNDERLYING -> Disease
-        ^                                 |   |      \
-HAS_SYMPTOM                               |   |       HAS_CONTRAINDICATION -> Contraindication
-        |                                 |   |
-    Stage                                 |   HAS_DIAGNOSIS -> Diagnosis
-        |                                 |   |
-HAS_STAGING_CONDITION -> Disease          |   HAS_MANAGEMENT -> Management
-        |                                 |   |
-HAS_CONTEXT -> PatientContext             |   HAS_OUTCOME -> Outcome
-                                          |   |
-                                          |   HAS_TREATMENT_CONTEXT
-                                          |           |
-                                          |       TreatmentContext
-                                          |           |
-                                          |       RECOMMENDS -> Management
-\end{verbatim}
+\paragraph{HIV Graph Schema}\leavevmode
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.62, transform shape,
+    every node/.style={font=\small},
+    entity/.style={draw, rounded corners, fill=blue!8, minimum width=2.2cm, minimum height=0.7cm, align=center, font=\small\bfseries},
+    rel/.style={-{Stealth[length=2.5mm]}, thick},
+    rlabel/.style={font=\scriptsize\itshape, fill=white, inner sep=1.5pt},
+]
+    % === Central node ===
+    \node[entity] (disease) at (0,0) {Disease};
 
-\paragraph{Immunization Graph Schema}
-\begin{verbatim}
-            DiseaseCategory
-                ^ IS_SUBTYPE_OF
-                |
-            Disease <-- PREVENTS -- Vaccine
-                                        |
-                                        IS_SUBTYPE_OF -> VaccineFamily
-                                        |
-                                        HAS_CONTRAINDICATION -> Contraindication
-                                                                      |
-                                                              IS_SUBTYPE_OF
-                                                                      |
-                                                            ContraindicationCategory
-\end{verbatim}
+    % === Top-center: DiseaseCategory ===
+    \node[entity] (discat) at (0,3) {DiseaseCategory};
+    \draw[rel] (disease.north) -- node[rlabel, left=3pt] {IS\_SUBTYPE\_OF} (discat.south);
+
+    % === Self-referencing: Coinfection — loop on left side of Disease, * above loop ===
+    \draw[rel, <->] (disease.150) to[out=150, in=210, looseness=5]
+        node[rlabel, above=5pt, pos=0.25] {*} (disease.210);
+
+    % === Left: Symptom ===
+    \node[entity] (symptom) at (-7,0) {Symptom};
+    \draw[rel] (disease.west) -- node[rlabel, above=3pt] {HAS\_SYMPTOM} (symptom.east);
+
+    % === Top-left: SymptomCategory ===
+    \node[entity] (symcat) at (-7,3) {SymptomCategory};
+    \draw[rel] (symptom.north) -- node[rlabel, right=3pt] {IN\_CATEGORY} (symcat.south);
+
+    % === Bottom-left: Stage ===
+    \node[entity] (stage) at (-7,-3.5) {Stage};
+    \draw[rel] (stage.north) -- node[rlabel, right=3pt] {HAS\_SYMPTOM} (symptom.south);
+
+    % === Bottom-far-left: PatientContext ===
+    \node[entity] (patctx) at (-7,-6) {PatientContext};
+    \draw[rel] (stage.south) -- node[rlabel, right=3pt] {HAS\_CONTEXT} (patctx.north);
+
+    % === Bottom-center: Disease (OI) ===
+    \node[entity] (disease_oi) at (0,-3.5) {Disease (OI)};
+    \draw[rel] (stage.east) -- node[rlabel, above=3pt] {HAS\_STAGING\_CONDITION} (disease_oi.west);
+
+    % === Disease(OI) -> Disease: vertical, label on left ===
+    \draw[rel] (disease_oi.north) -- node[rlabel, left=3pt] {INDICATES\_UNDERLYING} (disease.south);
+
+    % === Right top: Contraindication — raised higher ===
+    \node[entity] (contra) at (7,4) {Contraindication};
+    \draw[rel] (disease.60) to[bend left=25]
+        node[rlabel, above=3pt, pos=0.65] {HAS\_CONTRAINDICATION} (contra.west);
+
+    % === Right: Diagnosis — straight horizontal ===
+    \node[entity] (diagnosis) at (7,0) {Diagnosis};
+    \draw[rel] (disease.east) -- node[rlabel, above=3pt] {HAS\_DIAGNOSIS} (diagnosis.west);
+
+    % === Far-right top: Outcome — label a notch lower ===
+    \node[entity] (outcome) at (12,3) {Outcome};
+    \draw[rel] (disease.40) to[bend left=15]
+        node[rlabel, below=5pt, pos=0.55] {HAS\_OUTCOME} (outcome.west);
+
+    % === Far-right: Management — bend below Diagnosis line ===
+    \node[entity] (management) at (12,-1.5) {Management};
+    \draw[rel] (disease.-20) to[bend right=15]
+        node[rlabel, below=3pt, pos=0.65] {HAS\_MANAGEMENT} (management.west);
+
+    % === Bottom-right: TreatmentContext — label crosses curve, lower and to the right ===
+    \node[entity] (tctx) at (6,-4.5) {TreatmentContext};
+    \draw[rel] (disease.-70) to[bend right=20]
+        node[rlabel, right=0pt, pos=0.55] {HAS\_TREATMENT\_CONTEXT} (tctx.north);
+    \draw[rel] (tctx.east) to[bend right=20]
+        node[rlabel, right=3pt, pos=0.5] {RECOMMENDS} (management.south);
+
+\end{tikzpicture}
+\caption{HIV Knowledge Graph Schema (387 nodes, 689 edges). Disease is the central node; Stage and TreatmentContext provide additional clinical context. {\normalfont *\,Disease nodes are also linked to other Disease nodes via \textit{HAS\_COINFECTION} relationships, indicating diseases that commonly co-occur.}}
+\label{fig:hiv_schema}
+\end{figure}
+
+\vspace{1cm}
+
+\paragraph{Immunization Graph Schema}\leavevmode
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[scale=0.62, transform shape,
+    every node/.style={font=\small},
+    entity/.style={draw, rounded corners, fill=green!8, minimum width=2.8cm, minimum height=0.8cm, align=center, font=\small\bfseries},
+    rel/.style={-{Stealth[length=2.5mm]}, thick},
+    rlabel/.style={font=\scriptsize\itshape, fill=white, inner sep=1.5pt},
+]
+    % Disease and DiseaseCategory
+    \node[entity] (disease) at (0,0) {Disease};
+    \node[entity] (discat) at (0,2.5) {DiseaseCategory};
+    \draw[rel] (disease) -- node[rlabel, right=3pt] {IS\_SUBTYPE\_OF} (discat);
+
+    % Vaccine
+    \node[entity] (vaccine) at (5,0) {Vaccine};
+    \draw[rel] (vaccine) -- node[rlabel, above=3pt] {PREVENTS} (disease);
+
+    % VaccineFamily
+    \node[entity] (vacfam) at (5,2.5) {VaccineFamily};
+    \draw[rel] (vaccine) -- node[rlabel, right=3pt] {IS\_SUBTYPE\_OF} (vacfam);
+
+    % Contraindication
+    \node[entity] (contra) at (10,0) {Contraindication};
+    \draw[rel] (vaccine) -- node[rlabel, above=3pt] {HAS\_CONTRAINDICATION} (contra);
+
+    % ContraindicationCategory
+    \node[entity] (contracat) at (10,2.5) {Contraindication\\Category};
+    \draw[rel] (contra) -- node[rlabel, right=3pt] {IS\_SUBTYPE\_OF} (contracat);
+
+\end{tikzpicture}
+\caption{Immunization Knowledge Graph Schema. Vaccines link to diseases they prevent and contraindications. 192 nodes, 342 edges.}
+\label{fig:imm_schema}
+\end{figure}
 
 \paragraph{HIV Node and Edge Counts}
 
@@ -278,7 +349,8 @@ Edges carry metadata used by MCQA generation:
 \centering
 \caption{Edge Property Summary}
 \label{tab:edge_props}
-\begin{tabular}{l l l l}
+\footnotesize
+\begin{tabular}{p{2.2cm} p{3.8cm} p{3.8cm} p{3.5cm}}
 \hline
 \textbf{Property} & \textbf{On Edge Type} & \textbf{Values} & \textbf{Source} \\
 \hline
@@ -292,9 +364,25 @@ vaccine\_type & on Vaccine nodes & live / inactivated & immunization.py \\
 \end{tabular}
 \end{table}
 
+Figures~\ref{fig:hiv_overview} and~\ref{fig:immu_overview} show the full graph contents as sankey diagrams.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/hiv_overview.png}
+\caption{HIV package overview. Sankey diagram from ICD-11 classification hierarchy (Chapter, Block, Sub-block) through individual diseases to symptom system categories. Flow width is proportional to connection count at each level.}
+\label{fig:hiv_overview}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/immu_overview.png}
+\caption{Immunization package overview. Sankey diagram of contraindication categories, vaccine families, individual vaccines, target diseases, and symptom systems. Most diseases lack symptom data in this package, as shown in the Uncategorized group.}
+\label{fig:immu_overview}
+\end{figure}
+
 \subsubsection{TreatmentContext Model}
 
-TreatmentContext is an intermediate node between Disease and Management. It represents a clinical condition under which a specific treatment is recommended---for example, ``In an HIV patient with HBV coinfection, which ART regimen is preferred?'' A flat disease-treatment schema cannot express this.
+TreatmentContext is an intermediate node between Disease and Management. It represents a clinical condition under which a specific treatment is recommended---for example, ``In an HIV patient with HBV coinfection, which ART regimen is preferred?'' A flat disease-to-treatment edge cannot capture this distinction.
 
 TreatmentContext nodes are derived from two sources:
 \begin{enumerate}
@@ -329,9 +417,25 @@ Other data limitations:
     \item \textbf{Both packages}: Draft versions with some empty ValueSets (e.g., ART regimen line assignments DE77--DE81, HBV/HCV treatment). Stage-to-treatment mappings and diagnostic test preferences are not in FHIR and required manual curation.
 \end{itemize}
 
+Figures~\ref{fig:hiv_detailed} and~\ref{fig:herpes_detail} show the difference in data coverage between diseases. HIV has 49 symptoms, 17 diagnoses, 46 management options, 15 treatment contexts, and 3 coinfections. Herpes Zoster---a reclassified opportunistic infection---has none of that: only a disease category and a WHO HIV staging indicator (Stage 2 condition).
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/hiv_detailed.png}
+\caption{Disease Focus view of HIV: 49 symptoms, 17 diagnoses, 46 management options, 15 treatment contexts, 27 staging indicators, and 3 coinfections.}
+\label{fig:hiv_detailed}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figures/herpes_detail.png}
+\caption{Disease Focus view of Herpes Zoster, a reclassified opportunistic infection with only a disease category and a WHO HIV staging indicator (Stage 2 condition). No independent symptoms, diagnoses, or management data exist for this disease.}
+\label{fig:herpes_detail}
+\end{figure}
+
 \subsubsection{Neo4j Ingestion}
 
-Graph ingestion is implemented as the final pipeline phase:
+The final pipeline phase loads the graph into Neo4j:
 \begin{verbatim}
 Code: export/neo4j_loader.py
 \end{verbatim}
