@@ -364,22 +364,6 @@ vaccine\_type & on Vaccine nodes & live / inactivated & immunization.py \\
 \end{tabular}
 \end{table}
 
-Figures~\ref{fig:hiv_overview} and~\ref{fig:immu_overview} show the full graph contents as sankey diagrams.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{figures/hiv_overview.png}
-\caption{HIV package overview. Sankey diagram from ICD-11 classification hierarchy (Chapter, Block, Sub-block) through individual diseases to symptom system categories. Flow width is proportional to connection count at each level.}
-\label{fig:hiv_overview}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{figures/immu_overview.png}
-\caption{Immunization package overview. Sankey diagram of contraindication categories, vaccine families, individual vaccines, target diseases, and symptom systems. Most diseases lack symptom data in this package, as shown in the Uncategorized group.}
-\label{fig:immu_overview}
-\end{figure}
-
 \subsubsection{TreatmentContext Model}
 
 TreatmentContext is an intermediate node between Disease and Management. It represents a clinical condition under which a specific treatment is recommended---for example, ``In an HIV patient with HBV coinfection, which ART regimen is preferred?'' A flat disease-to-treatment edge cannot capture this distinction.
@@ -416,22 +400,6 @@ Other data limitations:
     \item \textbf{Immunization package}: 26 diseases exist only as vaccine targets. No symptoms, treatments, or diagnostic tests are available for any disease. Questions are limited to vaccine-disease and vaccine-contraindication relationships.
     \item \textbf{Both packages}: Draft versions with some empty ValueSets (e.g., ART regimen line assignments DE77--DE81, HBV/HCV treatment). Stage-to-treatment mappings and diagnostic test preferences are not in FHIR and required manual curation.
 \end{itemize}
-
-Figures~\ref{fig:hiv_detailed} and~\ref{fig:herpes_detail} show the difference in data coverage between diseases. HIV has 49 symptoms, 17 diagnoses, 46 management options, 15 treatment contexts, and 3 coinfections. Herpes Zoster---a reclassified opportunistic infection---has none of that: only a disease category and a WHO HIV staging indicator (Stage 2 condition).
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{figures/hiv_detailed.png}
-\caption{Disease Focus view of HIV: 49 symptoms, 17 diagnoses, 46 management options, 15 treatment contexts, 27 staging indicators, and 3 coinfections.}
-\label{fig:hiv_detailed}
-\end{figure}
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=\textwidth]{figures/herpes_detail.png}
-\caption{Disease Focus view of Herpes Zoster, a reclassified opportunistic infection with only a disease category and a WHO HIV staging indicator (Stage 2 condition). No independent symptoms, diagnoses, or management data exist for this disease.}
-\label{fig:herpes_detail}
-\end{figure}
 
 \subsubsection{Neo4j Ingestion}
 
